@@ -50,7 +50,7 @@ func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Additi
 
 	sl = &Listener{false, config, nil, nil}
 
-	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey)
+	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey, C.Path)
 	if err != nil {
 		return nil, err
 	}
