@@ -10,9 +10,6 @@ on:
       - Alpha
     tags:
       - "v*"
-  pull_request_target:
-    branches:
-      - Alpha
 jobs:
   Build:
     permissions: write-all
