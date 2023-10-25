@@ -53,6 +53,10 @@ func init() {
 	if runtime.GOARCH == "amd64" && cpuid.CPU.X64Level() < 3 {
 		amd64Compatible = "-compatible"
 	}
+
+	if slices.Contains(features.TAGS, "with_cgo") {
+		withCGO = "-cgo"
+	}
 }
 
 type updateError struct {
@@ -141,9 +145,9 @@ func prepare(exePath string) (err error) {
 	backupDir = filepath.Join(workDir, "meta-backup")
 
 	if runtime.GOOS == "windows" {
-		updateExeName = "clash.meta" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
+		updateExeName = "clash.meta" + "-" + runtime.GOOS + "-" + runtime.GOARCH + withCGO + amd64Compatible + ".exe"
 	} else {
-		updateExeName = "clash.meta" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
+		updateExeName = "clash.meta" + "-" + runtime.GOOS + "-" + runtime.GOARCH + withCGO + amd64Compatible
 	}
 
 	log.Infoln("updateExeName: %s ", updateExeName)
