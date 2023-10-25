@@ -30,6 +30,7 @@ var (
 	goarm           string
 	gomips          string
 	amd64Compatible string
+	withCGO          string
 
 	workDir string
 
