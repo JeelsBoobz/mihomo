@@ -11,10 +11,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Dreamacro/clash/constant/features"
 	clashHttp "github.com/Dreamacro/clash/component/http"
 	"github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -77,6 +79,10 @@ func Update(execPath string) (err error) {
 	if latestVersion == constant.Version {
 		err := &updateError{Message: "already using latest version"}
 		return err
+	}
+
+	if slices.Contains(features.TAGS, "with_cgo") {
+		latestVersion = "cgo-"+latestVersion
 	}
 
 	updateDownloadURL()
