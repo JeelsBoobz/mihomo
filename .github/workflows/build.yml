@@ -134,14 +134,14 @@ jobs:
 
       - name: Setup Go
         if: ${{ matrix.job.type!='WithoutCGO-GO120' }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: "1.21"
           check-latest: true
 
       - name: Setup Go
         if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: "1.20"
           check-latest: true
