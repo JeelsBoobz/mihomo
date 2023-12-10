@@ -11,10 +11,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/constant/features"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/constant"
 	C "github.com/metacubex/mihomo/constant"
@@ -29,6 +31,7 @@ var (
 	goarm           string
 	gomips          string
 	amd64Compatible string
+	withCGO         string
 
 	workDir string
 
@@ -42,8 +45,8 @@ var (
 	backupExeName  string // 备份文件名
 	updateExeName  string // 更新后的可执行文件
 
-	baseURL       string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/mihomo"
-	versionURL    string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
+	baseURL       string = "https://github.com/JeelsBoobz/mihomo/releases/download/Prerelease-Alpha/mihomo"
+	versionURL    string = "https://github.com/JeelsBoobz/mihomo/releases/download/Prerelease-Alpha/version.txt"
 	packageURL    string
 	latestVersion string
 )
@@ -51,6 +54,10 @@ var (
 func init() {
 	if runtime.GOARCH == "amd64" && cpuid.CPU.X64Level() < 3 {
 		amd64Compatible = "-compatible"
+	}
+
+	if slices.Contains(features.Tags(), "with_cgo") {
+		withCGO = "-cgo"
 	}
 }
 
@@ -136,9 +143,9 @@ func prepare(exePath string) (err error) {
 	backupDir = filepath.Join(workDir, "meta-backup")
 
 	if runtime.GOOS == "windows" {
-		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
+		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + withCGO + ".exe"
 	} else {
-		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
+		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + withCGO
 	}
 
 	log.Infoln("updateExeName: %s ", updateExeName)
