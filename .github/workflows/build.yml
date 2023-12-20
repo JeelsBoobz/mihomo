@@ -183,7 +183,7 @@ jobs:
         run: echo ${VERSION} > bin/version.txt
         shell: bash
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v3
         if: ${{ success() }}
         with:
           name: artifact
@@ -195,7 +195,7 @@ jobs:
     needs: [Build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: artifact
           path: bin/
@@ -257,7 +257,7 @@ jobs:
     needs: [Build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: artifact
           path: bin/
