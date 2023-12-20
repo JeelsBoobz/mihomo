@@ -40,7 +40,7 @@ jobs:
             }
           - {
               type: "WithoutCGO",
-              target: "linux-386 linux-riscv64",
+              target: "linux-386 linux-riscv64 linux-loong64",
               id: "5",
             }
           - {
@@ -280,5 +280,3 @@ jobs:
         uses: StuYarrow/publish-release@v1.1.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          id: ${{ steps.release.outputs.id }}
