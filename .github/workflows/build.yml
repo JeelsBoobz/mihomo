@@ -205,7 +205,7 @@ jobs:
         working-directory: bin
 
       - name: Delete tag Prerelease-${{ github.ref_name }} if exists
-        uses: JeelsBoobz/delete-tag-and-release@master
+        uses: dev-drprasad/delete-tag-and-release@master
         with:
           delete_release: true
           tag_name: Prerelease-${{ github.ref_name }}
