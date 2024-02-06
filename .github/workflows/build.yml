@@ -60,8 +60,13 @@ jobs:
             }
           - {
               type: "WithoutCGO",
-              target: "darwin-amd64 darwin-arm64 android-arm64",
+              target: "darwin-amd64 darwin-arm64",
               id: "9",
+            }
+          - {
+            type: "WithoutCGO",
+            target: "darwin-amd64-compatible android-arm64",
+            id: "10",
             }
           - { type: "WithCGO", target: "windows/*", id: "1" }
           - { type: "WithCGO", target: "linux/386", id: "2" }
@@ -183,10 +188,10 @@ jobs:
         run: echo ${VERSION} > bin/version.txt
         shell: bash
 
-      - uses: actions/upload-artifact@v3
-        if: ${{ success() }}
+      - uses: actions/upload-artifact@v4
+        if: ${{  success() }}
         with:
-          name: artifact
+          name: artifact-${{ matrix.job.type }}-${{ matrix.job.target }}
           path: bin/
 
   Upload-Prerelease:
@@ -195,10 +200,10 @@ jobs:
     needs: [Build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: artifact
           path: bin/
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         run: ls -R
@@ -223,14 +228,14 @@ jobs:
           tag_name: Prerelease-${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      
       - run: |
           cat > release.txt << 'EOF'
           Release created at  ${{ env.BUILDTIME }}
           Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
           <br>
           [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/mihomo/wiki/FAQ)
-          [二进制文件筛选 / Binary file selector] (https://metacubex.github.io/Meta-Docs/startup/#_1)
+          [二进制文件筛选 / Binary file selector](https://metacubex.github.io/Meta-Docs/startup/#_1)
           [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
           EOF
 
@@ -259,7 +264,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -275,10 +280,10 @@ jobs:
           bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
           rm ./genReleaseNote.sh
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: artifact
           path: bin/
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         run: ls -R

@@ -17,6 +17,7 @@ GOBUILD=CGO_ENABLED=0 go build -tags "with_gvisor,with_low_memory" -trimpath -ld
 		-w -s -buildid='
 
 PLATFORM_LIST = \
+	darwin-amd64-compatible \
 	darwin-amd64 \
 	darwin-arm64 \
 	linux-amd64-compatible \
