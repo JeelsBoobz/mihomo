@@ -10,6 +10,11 @@ on:
       - Alpha
     tags:
       - "v*"
+      
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   Build:
     permissions: write-all
@@ -38,11 +43,7 @@ jobs:
               target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
               id: "4",
             }
-          - {
-              type: "WithoutCGO",
-              target: "linux-386 linux-riscv64 linux-loong64",
-              id: "5",
-            }
+          - { type: "WithoutCGO", target: "linux-386 linux-riscv64 linux-loong64", id: "5" }
           - {
               type: "WithoutCGO",
               target: "freebsd-386 freebsd-amd64 freebsd-arm64",
@@ -60,20 +61,32 @@ jobs:
             }
           - {
               type: "WithoutCGO",
-              target: "darwin-amd64 darwin-arm64 android-arm64",
+              target: "darwin-amd64 darwin-arm64",
               id: "9",
             }
-          - { type: "WithCGO", target: "windows/*", id: "1" }
-          - { type: "WithCGO", target: "linux/386", id: "2" }
-          - { type: "WithCGO", target: "linux/amd64", id: "3" }
-          - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "4" }
-          - { type: "WithCGO", target: "linux/arm,", id: "5" }
-          - { type: "WithCGO", target: "linux/arm-6,linux/arm-7", id: "6" }
-          - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "7" }
-          - { type: "WithCGO", target: "linux/mips64", id: "8" }
-          - { type: "WithCGO", target: "linux/mips64le", id: "9" }
-          - { type: "WithCGO", target: "darwin-10.16/*", id: "10" }
-          - { type: "WithCGO", target: "android", id: "11" }
+          - {
+            type: "WithoutCGO",
+            target: "darwin-amd64-compatible android-arm64",
+            id: "10",
+            }
+          # only for test
+          - { type: "WithoutCGO-GO120", target: "linux-amd64 linux-amd64-compatible",id: "1" }
+          # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
+          - { type: "WithoutCGO-GO120", target: "windows-amd64-compatible windows-amd64 windows-386",id: "2" }
+          # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
+          - { type: "WithoutCGO-GO120", target: "darwin-amd64 darwin-arm64",id: "3" }
+          - { type: "WithoutCGO-GO120", target: "darwin-amd64-compatible android-arm64",id: "4" }
+#          - { type: "WithCGO", target: "windows/*", id: "1" }
+#          - { type: "WithCGO", target: "linux/386", id: "2" }
+#          - { type: "WithCGO", target: "linux/amd64", id: "3" }
+#          - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "4" }
+#          - { type: "WithCGO", target: "linux/arm,", id: "5" }
+#          - { type: "WithCGO", target: "linux/arm-6,linux/arm-7", id: "6" }
+#          - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "7" }
+#          - { type: "WithCGO", target: "linux/mips64", id: "8" }
+#          - { type: "WithCGO", target: "linux/mips64le", id: "9" }
+#          - { type: "WithCGO", target: "darwin-10.16/*", id: "10" }
+#          - { type: "WithCGO", target: "android", id: "11" }
 
     steps:
       - name: Check out code into the Go module directory
@@ -89,31 +102,45 @@ jobs:
         shell: bash
 
       - name: Set variables
+        if: ${{github.ref_name=='Meta'}}
+        run: echo "VERSION=meta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
         if: ${{github.ref_name=='' || github.ref_type=='tag'}}
         run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
         shell: bash
 
       - name: Set ENV
         run: |
-          echo "NAME=mihomo" >> $GITHUB_ENV
-          echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
-          echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
-          echo "BUILDTIME=$(TZ=Asia/Jakarta date)" >> $GITHUB_ENV
+          sudo timedatectl set-timezone "Asia/Jakarta"
+          echo "BUILDTIME=$(date)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set ENV
+        run: |
           echo "TAGS=with_gvisor,with_low_memory" >> $GITHUB_ENV
           echo "LDFLAGS=-X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
+          echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
         shell: bash
 
       - name: Set ENV
         if: ${{ matrix.job.type=='WithCGO' }}
         run: |
           echo "TAGS=with_cgo,with_gvisor,with_low_memory" >> $GITHUB_ENV
-          echo "LDFLAGS=-X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
-        shell: bash
 
       - name: Setup Go
+        if: ${{ matrix.job.type!='WithoutCGO-GO120' }}
         uses: actions/setup-go@v5
         with:
-          go-version: "stable"
+          go-version: "1.21"
+          check-latest: true
+
+      - name: Setup Go
+        if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.20"
           check-latest: true
 
       - name: Build WithoutCGO
@@ -136,12 +163,9 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           mkdir bin
-          CC=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin
-          CGO_ENABLED=1 CC=${CC}/armv7a-linux-androideabi33-clang GOARM=7 GOARCH=arm GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-armv7
-          CGO_ENABLED=1 CC=${CC}/aarch64-linux-android33-clang GOARCH=arm64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-arm64
-          CGO_ENABLED=1 CC=${CC}/i686-linux-android33-clang GOARCH=386 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-x86
-          CGO_ENABLED=1 CC=${CC}/x86_64-linux-android33-clang GOARCH=amd64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-x86_64
-      
+          CC=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
+          CGO_ENABLED=1 CC=${CC} GOARCH=arm64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-arm64
+
       - name: Set up xgo
         if: ${{ matrix.job.type=='WithCGO' && matrix.job.target!='android' }}
         run: |
@@ -154,9 +178,9 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           mkdir bin
-          xgo --branch ${{ github.ref_name }} --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} github.com/${{ github.repository }}
+          xgo --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} ./
 
-      - name: Rename WithCGO
+      - name: Rename
         if: ${{ matrix.job.type=='WithCGO' }}
         run: |
           cd bin
@@ -167,8 +191,19 @@ jobs:
           ls -la
           cd ..
 
+      - name: Rename
+        if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
+        run: |
+          cd bin
+          ls -la
+          cp ../.github/rename-go120.sh ./
+          bash ./rename-go120.sh
+          rm ./rename-go120.sh
+          ls -la
+          cd ..
+
       - name: Zip
-        if: ${{ success() }}
+        if: ${{  success() }}
         run: |
           cd bin
           ls -la
@@ -183,34 +218,33 @@ jobs:
         run: echo ${VERSION} > bin/version.txt
         shell: bash
 
-      - uses: actions/upload-artifact@v3
-        if: ${{ success() }}
+      - uses: actions/upload-artifact@v4
+        if: ${{  success() }}
         with:
-          name: artifact
+          name: artifact-${{ matrix.job.type }}-${{ matrix.job.target }}
           path: bin/
 
   Upload-Prerelease:
     permissions: write-all
-    if: ${{ github.ref_type=='branch' }}
+    if: ${{ github.ref_type == 'branch' && !startsWith(github.event_name, 'pull_request') }}
     needs: [Build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: artifact
           path: bin/
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         run: ls -R
         working-directory: bin
 
-      - name: Delete tag Prerelease-${{ github.ref_name }} if exists
-        uses: dev-drprasad/delete-tag-and-release@master
+      - name: Delete current release assets
+        uses: 8Mi-Tech/delete-release-assets-action@main
         with:
-          delete_release: true
-          tag_name: Prerelease-${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: Prerelease-${{ github.ref_name }}
+          deleteOnlyFromDrafts: false
 
       - name: Set Env
         run: |
@@ -218,39 +252,32 @@ jobs:
         shell: bash
 
       - name: Tag Repo
-        uses: richardsimko/update-tag@v1.0.11
+        uses: richardsimko/update-tag@v1.0.6
         with:
           tag_name: Prerelease-${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      
       - run: |
           cat > release.txt << 'EOF'
           Release created at  ${{ env.BUILDTIME }}
           Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
           <br>
           [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/mihomo/wiki/FAQ)
-          [二进制文件筛选 / Binary file selector] (https://metacubex.github.io/Meta-Docs/startup/#_1)
+          [二进制文件筛选 / Binary file selector](https://metacubex.github.io/Meta-Docs/startup/#_1)
           [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
           EOF
 
       - name: Upload Prerelease
-        id: prerelease
         uses: softprops/action-gh-release@v1
-        if: ${{ success() }}
+        if: ${{  success() }}
         with:
           tag_name: Prerelease-${{ github.ref_name }}
-          files: bin/*
+          files: |
+            bin/*
           prerelease: true
+          generate_release_notes: true
           body_path: release.txt
-
-      - name: Publish release
-        if: ${{ success() }}
-        uses: StuYarrow/publish-release@v1.1.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          id: ${{ steps.prerelease.outputs.id }}
 
   Upload-Release:
     permissions: write-all
@@ -259,7 +286,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -275,27 +302,20 @@ jobs:
           bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
           rm ./genReleaseNote.sh
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: artifact
           path: bin/
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         run: ls -R
         working-directory: bin
 
       - name: Upload Release
-        id: release
         uses: softprops/action-gh-release@v1
-        if: ${{ success() }}
+        if: ${{  success() }}
         with:
           tag_name: ${{ github.ref_name }}
           files: bin/*
           generate_release_notes: true
           body_path: release.md
-
-      - name: Publish release
-        if: ${{ success() }}
-        uses: StuYarrow/publish-release@v1.1.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
