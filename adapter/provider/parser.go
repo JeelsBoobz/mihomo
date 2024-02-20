@@ -36,6 +36,8 @@ type OverrideSchema struct {
 	Interface      *string `provider:"interface-name,omitempty"`
 	RoutingMark    *int    `provider:"routing-mark,omitempty"`
 	IPVersion      *string `provider:"ip-version,omitempty"`
+	NamePrefix     *string `provider:"name-prefix,omitempty"`
+	NameSuffix     *string `provider:"name-suffix,omitempty"`
 }
 
 type proxyProviderSchema struct {

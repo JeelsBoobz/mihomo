@@ -399,6 +399,14 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 				if override.IPVersion != nil {
 					mapping["ip-version"] = *override.IPVersion
 				}
+				if override.NamePrefix != nil {
+					name := mapping["name"].(string)
+					mapping["name"] = *override.NamePrefix + name
+				}
+				if override.NameSuffix != nil {
+					name := mapping["name"].(string)
+					mapping["name"] = name + *override.NameSuffix
+				}
 
 				proxy, err := adapter.ParseProxy(mapping)
 				if err != nil {
