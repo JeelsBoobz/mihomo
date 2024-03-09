@@ -3,9 +3,9 @@ package mmdb
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/oschwald/maxminddb-golang"
-	"github.com/sagernet/sing/common"
 )
 
 type geoip2Country struct {
@@ -27,7 +27,7 @@ func (r Reader) LookupCode(ipAddress net.IP) []string {
 		if country.Country.IsoCode == "" {
 			return []string{}
 		}
-		return []string{country.Country.IsoCode}
+		return []string{strings.ToLower(country.Country.IsoCode)}
 
 	case typeSing:
 		var code string
@@ -44,9 +44,11 @@ func (r Reader) LookupCode(ipAddress net.IP) []string {
 		case string:
 			return []string{record}
 		case []any: // lookup returned type of slice is []any
-			return common.Map(record, func(it any) string {
-				return it.(string)
-			})
+			result := make([]string, 0, len(record))
+			for _, item := range record {
+				result = append(result, item.(string))
+			}
+			return result
 		}
 		return []string{}
 
