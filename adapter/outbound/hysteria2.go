@@ -5,14 +5,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	CN "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
@@ -23,6 +22,7 @@ import (
 	"github.com/metacubex/sing-quic/hysteria2"
 
 	M "github.com/sagernet/sing/common/metadata"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 func init() {
@@ -44,7 +44,7 @@ type Hysteria2Option struct {
 	BasicOption
 	Name           string   `proxy:"name"`
 	Server         string   `proxy:"server"`
-	Port           int      `proxy:"port"`
+	Port           int      `proxy:"port,omitempty"`
 	Ports          string   `proxy:"ports,omitempty"`
 	HopInterval    int      `proxy:"hop-interval,omitempty"`
 	Up             string   `proxy:"up,omitempty"`
@@ -89,41 +89,6 @@ func closeHysteria2(h *Hysteria2) {
 	if h.client != nil {
 		_ = h.client.CloseWithError(errors.New("proxy removed"))
 	}
-}
-
-func parsePorts(portStr string) (ports []uint16) {
-	portStrs := strings.Split(portStr, ",")
-	for _, portStr := range portStrs {
-		if strings.Contains(portStr, "-") {
-			// Port range
-			portRange := strings.Split(portStr, "-")
-			if len(portRange) != 2 {
-				return nil
-			}
-			start, err := strconv.ParseUint(portRange[0], 10, 16)
-			if err != nil {
-				return nil
-			}
-			end, err := strconv.ParseUint(portRange[1], 10, 16)
-			if err != nil {
-				return nil
-			}
-			if start > end {
-				start, end = end, start
-			}
-			for i := start; i <= end; i++ {
-				ports = append(ports, uint16(i))
-			}
-		} else {
-			// Single port
-			port, err := strconv.ParseUint(portStr, 10, 16)
-			if err != nil {
-				return nil
-			}
-			ports = append(ports, uint16(port))
-		}
-	}
-	return ports
 }
 
 func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
@@ -174,7 +139,6 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		Context:            context.TODO(),
 		Dialer:             singDialer,
 		Logger:             log.SingLogger,
-		ServerAddress:      M.ParseSocksaddrHostPort(option.Server, uint16(option.Port)),
 		SendBPS:            StringToBps(option.Up),
 		ReceiveBPS:         StringToBps(option.Down),
 		SalamanderPassword: salamanderPassword,
@@ -183,15 +147,26 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		UDPDisabled:        false,
 		CWND:               option.CWND,
 		UdpMTU:             option.UdpMTU,
+		ServerAddress: func(ctx context.Context) (*net.UDPAddr, error) {
+			return resolveUDPAddrWithPrefer(ctx, "udp", addr, C.NewDNSPrefer(option.IPVersion))
+		},
 	}
 
+	var ranges utils.IntRanges[uint16]
+	var serverAddress []string
 	if option.Ports != "" {
-		ports := parsePorts(option.Ports)
-		if len(ports) > 0 {
-			for _, port := range ports {
-				clientOptions.ServerAddresses = append(clientOptions.ServerAddresses, M.ParseSocksaddrHostPort(option.Server, port))
+		ranges, err = utils.NewUnsignedRanges[uint16](option.Ports)
+		if err != nil {
+			return nil, err
+		}
+		ranges.Range(func(port uint16) bool {
+			serverAddress = append(serverAddress, net.JoinHostPort(option.Server, strconv.Itoa(int(port))))
+			return true
+		})
+		if len(serverAddress) > 0 {
+			clientOptions.ServerAddress = func(ctx context.Context) (*net.UDPAddr, error) {
+				return resolveUDPAddrWithPrefer(ctx, "udp", serverAddress[fastrand.Intn(len(serverAddress))], C.NewDNSPrefer(option.IPVersion))
 			}
-			clientOptions.ServerAddress = clientOptions.ServerAddresses[rand.Intn(len(clientOptions.ServerAddresses))]
 
 			if option.HopInterval == 0 {
 				option.HopInterval = defaultHopInterval
@@ -200,6 +175,9 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 			}
 			clientOptions.HopInterval = time.Duration(option.HopInterval) * time.Second
 		}
+	}
+	if option.Port == 0 && len(serverAddress) == 0 {
+		return nil, errors.New("invalid port")
 	}
 
 	client, err := hysteria2.NewClient(clientOptions)
