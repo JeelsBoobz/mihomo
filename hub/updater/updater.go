@@ -11,12 +11,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/constant/features"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/constant"
 	C "github.com/metacubex/mihomo/constant"
@@ -31,7 +29,6 @@ var (
 	goarm           string
 	gomips          string
 	amd64Compatible string
-	withCGO         string
 
 	workDir string
 
@@ -54,10 +51,6 @@ var (
 func init() {
 	if runtime.GOARCH == "amd64" && cpuid.CPU.X64Level() < 3 {
 		amd64Compatible = "-compatible"
-	}
-
-	if slices.Contains(features.Tags(), "with_cgo") {
-		withCGO = "-cgo"
 	}
 }
 
@@ -143,9 +136,11 @@ func prepare(exePath string) (err error) {
 	backupDir = filepath.Join(workDir, "meta-backup")
 
 	if runtime.GOOS == "windows" {
-		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + withCGO + ".exe"
+		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
+	} else if runtime.GOOS == "android" && runtime.GOARCH == "arm64" {
+		updateExeName = "mihomo-android-arm64-v8"
 	} else {
-		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + withCGO
+		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
 	}
 
 	log.Infoln("updateExeName: %s ", updateExeName)
@@ -447,7 +442,11 @@ func updateDownloadURL() {
 		middle = fmt.Sprintf("-%s-%s%s-%s", runtime.GOOS, runtime.GOARCH, goarm, latestVersion)
 	} else if runtime.GOARCH == "arm64" {
 		//-linux-arm64-alpha-e552b54.gz
-		middle = fmt.Sprintf("-%s-%s-%s", runtime.GOOS, runtime.GOARCH, latestVersion)
+		if runtime.GOOS == "android" {
+			middle = fmt.Sprintf("-%s-%s-v8-%s", runtime.GOOS, runtime.GOARCH, latestVersion)
+		} else {
+			middle = fmt.Sprintf("-%s-%s-%s", runtime.GOOS, runtime.GOARCH, latestVersion)
+		}
 	} else if isMIPS(runtime.GOARCH) && gomips != "" {
 		middle = fmt.Sprintf("-%s-%s-%s-%s", runtime.GOOS, runtime.GOARCH, gomips, latestVersion)
 	} else {
