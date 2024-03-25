@@ -138,7 +138,7 @@ func prepare(exePath string) (err error) {
 	if runtime.GOOS == "windows" {
 		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
 	} else if runtime.GOOS == "android" && runtime.GOARCH == "arm64" {
-		updateExeName = "mihomo-android-arm64-v8"
+		updateExeName = "mihomo-android-arm64"
 	} else {
 		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
 	}
