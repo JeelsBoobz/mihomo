@@ -15,9 +15,11 @@ import (
 	P "github.com/metacubex/mihomo/constant/provider"
 )
 
-var (
-	ruleProviders = map[string]P.RuleProvider{}
-)
+var tunnel P.Tunnel
+
+func SetTunnel(t P.Tunnel) {
+	tunnel = t
+}
 
 type ruleSetProvider struct {
 	*resource.Fetcher[any]
@@ -47,16 +49,6 @@ type ruleStrategy interface {
 	Reset()
 	Insert(rule string)
 	FinishInsert()
-}
-
-func RuleProviders() map[string]P.RuleProvider {
-	return ruleProviders
-}
-
-func SetRuleProvider(ruleProvider P.RuleProvider) {
-	if ruleProvider != nil {
-		ruleProviders[(ruleProvider).Name()] = ruleProvider
-	}
 }
 
 func (rp *ruleSetProvider) Type() P.ProviderType {
@@ -99,8 +91,8 @@ func (rp *ruleSetProvider) ShouldFindProcess() bool {
 	return rp.strategy.ShouldFindProcess()
 }
 
-func (rp *ruleSetProvider) AsRule(adaptor string) C.Rule {
-	panic("implement me")
+func (rp *ruleSetProvider) Strategy() any {
+	return rp.strategy
 }
 
 func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
@@ -126,6 +118,7 @@ func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleForma
 	onUpdate := func(elm interface{}) {
 		strategy := elm.(ruleStrategy)
 		rp.strategy = strategy
+		tunnel.RuleUpdateCallback().Emit(rp)
 	}
 
 	rp.strategy = newStrategy(behavior, parse)
