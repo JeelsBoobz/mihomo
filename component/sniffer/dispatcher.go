@@ -24,19 +24,33 @@ var (
 var Dispatcher *SnifferDispatcher
 
 type SnifferDispatcher struct {
-	enable          bool
-	sniffers        map[sniffer.Sniffer]SnifferConfig
-	forceDomain     *trie.DomainSet
-	skipSNI         *trie.DomainSet
-	skipList        *lru.LruCache[string, uint8]
-	forceDnsMapping bool
-	parsePureIp     bool
+	enable           bool
+	sniffers         map[sniffer.Sniffer]SnifferConfig
+	forceDomain      *trie.DomainSet
+	forceDomainRules []C.Rule
+	skipDomain       *trie.DomainSet
+	skipDomainRules  []C.Rule
+	skipList         *lru.LruCache[string, uint8]
+	forceDnsMapping  bool
+	parsePureIp      bool
 }
 
 func (sd *SnifferDispatcher) shouldOverride(metadata *C.Metadata) bool {
-	return (metadata.Host == "" && sd.parsePureIp) ||
-		sd.forceDomain.Has(metadata.Host) ||
-		(metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping)
+	if metadata.Host == "" && sd.parsePureIp {
+		return true
+	}
+	if metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping {
+		return true
+	}
+	if sd.forceDomain.Has(metadata.Host) {
+		return true
+	}
+	for _, rule := range sd.forceDomainRules {
+		if ok, _ := rule.Match(&C.Metadata{Host: metadata.Host}); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (sd *SnifferDispatcher) UDPSniff(packet C.PacketAdapter) bool {
@@ -94,9 +108,15 @@ func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata
 			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%d] to [%s:%d]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 			return false
 		} else {
-			if sd.skipSNI.Has(host) {
+			if sd.skipDomain.Has(host) {
 				log.Debugln("[Sniffer] Skip sni[%s]", host)
 				return false
+			}
+			for _, rule := range sd.skipDomainRules {
+				if ok, _ := rule.Match(&C.Metadata{Host: host}); ok {
+					log.Debugln("[Sniffer] Skip sni[%s]", host)
+					return false
+				}
 			}
 
 			sd.skipList.Delete(dst)
@@ -187,16 +207,19 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 }
 
 func NewSnifferDispatcher(snifferConfig map[sniffer.Type]SnifferConfig,
-	forceDomain *trie.DomainSet, skipSNI *trie.DomainSet,
+	forceDomain *trie.DomainSet, forceDomainRules []C.Rule,
+	skipDomain *trie.DomainSet, skipDomainRules []C.Rule,
 	forceDnsMapping bool, parsePureIp bool) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
-		enable:          true,
-		forceDomain:     forceDomain,
-		skipSNI:         skipSNI,
-		skipList:        lru.New(lru.WithSize[string, uint8](128), lru.WithAge[string, uint8](600)),
-		forceDnsMapping: forceDnsMapping,
-		parsePureIp:     parsePureIp,
-		sniffers:        make(map[sniffer.Sniffer]SnifferConfig, 0),
+		enable:           true,
+		forceDomain:      forceDomain,
+		forceDomainRules: forceDomainRules,
+		skipDomain:       skipDomain,
+		skipDomainRules:  skipDomainRules,
+		skipList:         lru.New(lru.WithSize[string, uint8](128), lru.WithAge[string, uint8](600)),
+		forceDnsMapping:  forceDnsMapping,
+		parsePureIp:      parsePureIp,
+		sniffers:         make(map[sniffer.Sniffer]SnifferConfig, 0),
 	}
 
 	for snifferName, config := range snifferConfig {

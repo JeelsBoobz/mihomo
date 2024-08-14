@@ -36,7 +36,7 @@ type Pool struct {
 	offset  netip.Addr
 	cycle   bool
 	mux     sync.Mutex
-	host    *trie.DomainTrie[struct{}]
+	host    *trie.DomainSet
 	rules   []C.Rule
 	ipnet   netip.Prefix
 	store   store
@@ -69,13 +69,12 @@ func (p *Pool) LookBack(ip netip.Addr) (string, bool) {
 // ShouldSkipped return if domain should be skipped
 func (p *Pool) ShouldSkipped(domain string) bool {
 	if p.host != nil {
-		if p.host.Search(domain) != nil {
+		if p.host.Has(domain) {
 			return true
 		}
 	}
 	for _, rule := range p.rules {
-		metadata := &C.Metadata{Host: domain}
-		if match, _ := rule.Match(metadata); match {
+		if match, _ := rule.Match(&C.Metadata{Host: domain}); match {
 			return true
 		}
 	}
@@ -164,7 +163,7 @@ func (p *Pool) restoreState() {
 
 type Options struct {
 	IPNet netip.Prefix
-	Host  *trie.DomainTrie[struct{}]
+	Host  *trie.DomainSet
 
 	Rules []C.Rule
 

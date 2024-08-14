@@ -363,7 +363,9 @@ func updateTun(general *config.General) {
 func updateSniffer(sniffer *config.Sniffer) {
 	if sniffer.Enable {
 		dispatcher, err := SNI.NewSnifferDispatcher(
-			sniffer.Sniffers, sniffer.ForceDomain, sniffer.SkipDomain,
+			sniffer.Sniffers,
+			sniffer.ForceDomain, sniffer.ForceDomainRules,
+			sniffer.SkipDomain, sniffer.SkipDomainRules,
 			sniffer.ForceDnsMapping, sniffer.ParsePureIp,
 		)
 		if err != nil {
