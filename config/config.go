@@ -25,7 +25,7 @@ import (
 	"github.com/metacubex/mihomo/component/geodata"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
-	SNIFF "github.com/metacubex/mihomo/component/sniffer"
+	"github.com/metacubex/mihomo/component/sniffer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/metacubex/mihomo/component/updater"
@@ -50,13 +50,12 @@ import (
 // General config
 type General struct {
 	Inbound
-	Controller
-	Mode                    T.TunnelMode `json:"mode"`
-	UnifiedDelay            bool
+	Mode                    T.TunnelMode      `json:"mode"`
+	UnifiedDelay            bool              `json:"unified-delay"`
 	LogLevel                log.LogLevel      `json:"log-level"`
 	IPv6                    bool              `json:"ipv6"`
 	Interface               string            `json:"interface-name"`
-	RoutingMark             int               `json:"-"`
+	RoutingMark             int               `json:"routing-mark"`
 	GeoXUrl                 GeoXUrl           `json:"geox-url"`
 	GeoAutoUpdate           bool              `json:"geo-auto-update"`
 	GeoUpdateInterval       int               `json:"geo-update-interval"`
@@ -91,24 +90,48 @@ type Inbound struct {
 	InboundMPTCP      bool           `json:"inbound-mptcp"`
 }
 
+// GeoXUrl config
+type GeoXUrl struct {
+	GeoIp   string `json:"geo-ip"`
+	Mmdb    string `json:"mmdb"`
+	ASN     string `json:"asn"`
+	GeoSite string `json:"geo-site"`
+}
+
 // Controller config
 type Controller struct {
-	ExternalController     string `json:"-"`
-	ExternalControllerTLS  string `json:"-"`
-	ExternalControllerUnix string `json:"-"`
-	ExternalUI             string `json:"-"`
-	ExternalDohServer      string `json:"-"`
-	Secret                 string `json:"-"`
+	ExternalController     string
+	ExternalControllerTLS  string
+	ExternalControllerUnix string
+	ExternalUI             string
+	ExternalDohServer      string
+	Secret                 string
+}
+
+// Experimental config
+type Experimental struct {
+	Fingerprints     []string
+	QUICGoDisableGSO bool
+	QUICGoDisableECN bool
+	IP4PEnable       bool
+}
+
+// IPTables config
+type IPTables struct {
+	Enable           bool
+	InboundInterface string
+	Bypass           []string
+	DnsRedirect      bool
 }
 
 // NTP config
 type NTP struct {
-	Enable        bool   `yaml:"enable"`
-	Server        string `yaml:"server"`
-	Port          int    `yaml:"port"`
-	Interval      int    `yaml:"interval"`
-	DialerProxy   string `yaml:"dialer-proxy"`
-	WriteToSystem bool   `yaml:"write-to-system"`
+	Enable        bool
+	Server        string
+	Port          int
+	Interval      int
+	DialerProxy   string
+	WriteToSystem bool
 }
 
 // DNS config
@@ -120,8 +143,8 @@ type DNS struct {
 	UseSystemHosts        bool
 	NameServer            []dns.NameServer
 	Fallback              []dns.NameServer
-	FallbackIPFilter      []C.Rule
-	FallbackDomainFilter  []C.Rule
+	FallbackIPFilter      []C.IpMatcher
+	FallbackDomainFilter  []C.DomainMatcher
 	Listen                string
 	EnhancedMode          C.DNSMode
 	DefaultNameserver     []dns.NameServer
@@ -134,48 +157,25 @@ type DNS struct {
 
 // Profile config
 type Profile struct {
-	StoreSelected bool `yaml:"store-selected"`
-	StoreFakeIP   bool `yaml:"store-fake-ip"`
+	StoreSelected bool
+	StoreFakeIP   bool
 }
 
+// TLS config
 type TLS struct {
-	Certificate     string   `yaml:"certificate"`
-	PrivateKey      string   `yaml:"private-key"`
-	CustomTrustCert []string `yaml:"custom-certifactes"`
-}
-
-// IPTables config
-type IPTables struct {
-	Enable           bool     `yaml:"enable" json:"enable"`
-	InboundInterface string   `yaml:"inbound-interface" json:"inbound-interface"`
-	Bypass           []string `yaml:"bypass" json:"bypass"`
-	DnsRedirect      bool     `yaml:"dns-redirect" json:"dns-redirect"`
-}
-
-type Sniffer struct {
-	Enable          bool
-	Sniffers        map[snifferTypes.Type]SNIFF.SnifferConfig
-	ForceDomain     []C.Rule
-	SkipDomain      []C.Rule
-	ForceDnsMapping bool
-	ParsePureIp     bool
-}
-
-// Experimental config
-type Experimental struct {
-	Fingerprints     []string `yaml:"fingerprints"`
-	QUICGoDisableGSO bool     `yaml:"quic-go-disable-gso"`
-	QUICGoDisableECN bool     `yaml:"quic-go-disable-ecn"`
-	IP4PEnable       bool     `yaml:"dialer-ip4p-convert"`
+	Certificate     string
+	PrivateKey      string
+	CustomTrustCert []string
 }
 
 // Config is mihomo config manager
 type Config struct {
 	General       *General
+	Controller    *Controller
+	Experimental  *Experimental
 	IPTables      *IPTables
 	NTP           *NTP
 	DNS           *DNS
-	Experimental  *Experimental
 	Hosts         *trie.DomainTrie[resolver.HostValue]
 	Profile       *Profile
 	Rules         []C.Rule
@@ -186,17 +186,8 @@ type Config struct {
 	Providers     map[string]providerTypes.ProxyProvider
 	RuleProviders map[string]providerTypes.RuleProvider
 	Tunnels       []LC.Tunnel
-	Sniffer       *Sniffer
+	Sniffer       *sniffer.Config
 	TLS           *TLS
-}
-
-type RawNTP struct {
-	Enable        bool   `yaml:"enable"`
-	Server        string `yaml:"server"`
-	ServerPort    int    `yaml:"server-port"`
-	Interval      int    `yaml:"interval"`
-	DialerProxy   string `yaml:"dialer-proxy"`
-	WriteToSystem bool   `yaml:"write-to-system"`
 }
 
 type RawDNS struct {
@@ -233,6 +224,15 @@ type RawClashForAndroid struct {
 	UiSubtitlePattern string `yaml:"ui-subtitle-pattern" json:"ui-subtitle-pattern"`
 }
 
+type RawNTP struct {
+	Enable        bool   `yaml:"enable" json:"enable"`
+	Server        string `yaml:"server" json:"server"`
+	Port          int    `yaml:"port" json:"port"`
+	Interval      int    `yaml:"interval" json:"interval"`
+	DialerProxy   string `yaml:"dialer-proxy" json:"dialer-proxy"`
+	WriteToSystem bool   `yaml:"write-to-system" json:"write-to-system"`
+}
+
 type RawTun struct {
 	Enable              bool       `yaml:"enable" json:"enable"`
 	Device              string     `yaml:"device" json:"device"`
@@ -244,35 +244,35 @@ type RawTun struct {
 	MTU        uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	GSO        bool   `yaml:"gso" json:"gso,omitempty"`
 	GSOMaxSize uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
-	//Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
-	Inet6Address           []netip.Prefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
-	IPRoute2TableIndex     int            `yaml:"iproute2-table-index" json:"iproute2_table_index,omitempty"`
-	IPRoute2RuleIndex      int            `yaml:"iproute2-rule-index" json:"iproute2_rule_index,omitempty"`
-	AutoRedirect           bool           `yaml:"auto-redirect" json:"auto_redirect,omitempty"`
-	AutoRedirectInputMark  uint32         `yaml:"auto-redirect-input-mark" json:"auto_redirect_input_mark,omitempty"`
-	AutoRedirectOutputMark uint32         `yaml:"auto-redirect-output-mark" json:"auto_redirect_output_mark,omitempty"`
-	StrictRoute            bool           `yaml:"strict-route" json:"strict_route,omitempty"`
-	RouteAddress           []netip.Prefix `yaml:"route-address" json:"route_address,omitempty"`
-	RouteAddressSet        []string       `yaml:"route-address-set" json:"route_address_set,omitempty"`
-	RouteExcludeAddress    []netip.Prefix `yaml:"route-exclude-address" json:"route_exclude_address,omitempty"`
-	RouteExcludeAddressSet []string       `yaml:"route-exclude-address-set" json:"route_exclude_address_set,omitempty"`
+	//Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
+	Inet6Address           []netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
+	IPRoute2TableIndex     int            `yaml:"iproute2-table-index" json:"iproute2-table-index,omitempty"`
+	IPRoute2RuleIndex      int            `yaml:"iproute2-rule-index" json:"iproute2-rule-index,omitempty"`
+	AutoRedirect           bool           `yaml:"auto-redirect" json:"auto-redirect,omitempty"`
+	AutoRedirectInputMark  uint32         `yaml:"auto-redirect-input-mark" json:"auto-redirect-input-mark,omitempty"`
+	AutoRedirectOutputMark uint32         `yaml:"auto-redirect-output-mark" json:"auto-redirect-output-mark,omitempty"`
+	StrictRoute            bool           `yaml:"strict-route" json:"strict-route,omitempty"`
+	RouteAddress           []netip.Prefix `yaml:"route-address" json:"route-address,omitempty"`
+	RouteAddressSet        []string       `yaml:"route-address-set" json:"route-address-set,omitempty"`
+	RouteExcludeAddress    []netip.Prefix `yaml:"route-exclude-address" json:"route-exclude-address,omitempty"`
+	RouteExcludeAddressSet []string       `yaml:"route-exclude-address-set" json:"route-exclude-address-set,omitempty"`
 	IncludeInterface       []string       `yaml:"include-interface" json:"include-interface,omitempty"`
 	ExcludeInterface       []string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
-	IncludeUID             []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
-	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
-	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
-	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude_uid_range,omitempty"`
-	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include_android_user,omitempty"`
-	IncludePackage         []string       `yaml:"include-package" json:"include_package,omitempty"`
-	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude_package,omitempty"`
-	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
-	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
+	IncludeUID             []uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
+	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
+	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
+	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
+	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include-android-user,omitempty"`
+	IncludePackage         []string       `yaml:"include-package" json:"include-package,omitempty"`
+	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
+	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
+	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
 	FileDescriptor         int            `yaml:"file-descriptor" json:"file-descriptor"`
 
-	Inet4RouteAddress        []netip.Prefix `yaml:"inet4-route-address" json:"inet4_route_address,omitempty"`
-	Inet6RouteAddress        []netip.Prefix `yaml:"inet6-route-address" json:"inet6_route_address,omitempty"`
-	Inet4RouteExcludeAddress []netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4_route_exclude_address,omitempty"`
-	Inet6RouteExcludeAddress []netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6_route_exclude_address,omitempty"`
+	Inet4RouteAddress        []netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
+	Inet6RouteAddress        []netip.Prefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
+	Inet4RouteExcludeAddress []netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4-route-exclude-address,omitempty"`
+	Inet6RouteExcludeAddress []netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6-route-exclude-address,omitempty"`
 }
 
 type RawTuicServer struct {
@@ -290,73 +290,26 @@ type RawTuicServer struct {
 	CWND                  int               `yaml:"cwnd" json:"cwnd,omitempty"`
 }
 
-type RawConfig struct {
-	Port                    int               `yaml:"port" json:"port"`
-	SocksPort               int               `yaml:"socks-port" json:"socks-port"`
-	RedirPort               int               `yaml:"redir-port" json:"redir-port"`
-	TProxyPort              int               `yaml:"tproxy-port" json:"tproxy-port"`
-	MixedPort               int               `yaml:"mixed-port" json:"mixed-port"`
-	ShadowSocksConfig       string            `yaml:"ss-config"`
-	VmessConfig             string            `yaml:"vmess-config"`
-	InboundTfo              bool              `yaml:"inbound-tfo"`
-	InboundMPTCP            bool              `yaml:"inbound-mptcp"`
-	Authentication          []string          `yaml:"authentication" json:"authentication"`
-	SkipAuthPrefixes        []netip.Prefix    `yaml:"skip-auth-prefixes"`
-	LanAllowedIPs           []netip.Prefix    `yaml:"lan-allowed-ips"`
-	LanDisAllowedIPs        []netip.Prefix    `yaml:"lan-disallowed-ips"`
-	AllowLan                bool              `yaml:"allow-lan" json:"allow-lan"`
-	BindAddress             string            `yaml:"bind-address" json:"bind-address"`
-	Mode                    T.TunnelMode      `yaml:"mode" json:"mode"`
-	UnifiedDelay            bool              `yaml:"unified-delay" json:"unified-delay"`
-	LogLevel                log.LogLevel      `yaml:"log-level" json:"log-level"`
-	IPv6                    bool              `yaml:"ipv6" json:"ipv6"`
-	ExternalController      string            `yaml:"external-controller"`
-	ExternalControllerUnix  string            `yaml:"external-controller-unix"`
-	ExternalControllerTLS   string            `yaml:"external-controller-tls"`
-	ExternalUI              string            `yaml:"external-ui"`
-	ExternalUIURL           string            `yaml:"external-ui-url" json:"external-ui-url"`
-	ExternalUIName          string            `yaml:"external-ui-name" json:"external-ui-name"`
-	ExternalDohServer       string            `yaml:"external-doh-server"`
-	Secret                  string            `yaml:"secret"`
-	Interface               string            `yaml:"interface-name"`
-	RoutingMark             int               `yaml:"routing-mark"`
-	Tunnels                 []LC.Tunnel       `yaml:"tunnels"`
-	GeoAutoUpdate           bool              `yaml:"geo-auto-update" json:"geo-auto-update"`
-	GeoUpdateInterval       int               `yaml:"geo-update-interval" json:"geo-update-interval"`
-	GeodataMode             bool              `yaml:"geodata-mode" json:"geodata-mode"`
-	GeodataLoader           string            `yaml:"geodata-loader" json:"geodata-loader"`
-	GeositeMatcher          string            `yaml:"geosite-matcher" json:"geosite-matcher"`
-	TCPConcurrent           bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
-	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
-	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
-	GlobalUA                string            `yaml:"global-ua"`
-	KeepAliveIdle           int               `yaml:"keep-alive-idle"`
-	KeepAliveInterval       int               `yaml:"keep-alive-interval"`
-	DisableKeepAlive        bool              `yaml:"disable-keep-alive"`
-
-	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
-	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
-	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
-	Hosts         map[string]any            `yaml:"hosts" json:"hosts"`
-	NTP           RawNTP                    `yaml:"ntp" json:"ntp"`
-	DNS           RawDNS                    `yaml:"dns" json:"dns"`
-	Tun           RawTun                    `yaml:"tun"`
-	TuicServer    RawTuicServer             `yaml:"tuic-server"`
-	IPTables      IPTables                  `yaml:"iptables"`
-	Experimental  Experimental              `yaml:"experimental"`
-	Profile       Profile                   `yaml:"profile"`
-	GeoXUrl       GeoXUrl                   `yaml:"geox-url"`
-	Proxy         []map[string]any          `yaml:"proxies"`
-	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
-	Rule          []string                  `yaml:"rules"`
-	SubRules      map[string][]string       `yaml:"sub-rules"`
-	RawTLS        TLS                       `yaml:"tls"`
-	Listeners     []map[string]any          `yaml:"listeners"`
-
-	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
+type RawIPTables struct {
+	Enable           bool     `yaml:"enable" json:"enable"`
+	InboundInterface string   `yaml:"inbound-interface" json:"inbound-interface"`
+	Bypass           []string `yaml:"bypass" json:"bypass"`
+	DnsRedirect      bool     `yaml:"dns-redirect" json:"dns-redirect"`
 }
 
-type GeoXUrl struct {
+type RawExperimental struct {
+	Fingerprints     []string `yaml:"fingerprints"`
+	QUICGoDisableGSO bool     `yaml:"quic-go-disable-gso"`
+	QUICGoDisableECN bool     `yaml:"quic-go-disable-ecn"`
+	IP4PEnable       bool     `yaml:"dialer-ip4p-convert"`
+}
+
+type RawProfile struct {
+	StoreSelected bool `yaml:"store-selected" json:"store-selected"`
+	StoreFakeIP   bool `yaml:"store-fake-ip" json:"store-fake-ip"`
+}
+
+type RawGeoXUrl struct {
 	GeoIp   string `yaml:"geoip" json:"geoip"`
 	Mmdb    string `yaml:"mmdb" json:"mmdb"`
 	ASN     string `yaml:"asn" json:"asn"`
@@ -364,20 +317,95 @@ type GeoXUrl struct {
 }
 
 type RawSniffer struct {
-	Enable          bool                         `yaml:"enable" json:"enable"`
-	OverrideDest    bool                         `yaml:"override-destination" json:"override-destination"`
-	Sniffing        []string                     `yaml:"sniffing" json:"sniffing"`
-	ForceDomain     []string                     `yaml:"force-domain" json:"force-domain"`
-	SkipDomain      []string                     `yaml:"skip-domain" json:"skip-domain"`
-	Ports           []string                     `yaml:"port-whitelist" json:"port-whitelist"`
-	ForceDnsMapping bool                         `yaml:"force-dns-mapping" json:"force-dns-mapping"`
-	ParsePureIp     bool                         `yaml:"parse-pure-ip" json:"parse-pure-ip"`
-	Sniff           map[string]RawSniffingConfig `yaml:"sniff" json:"sniff"`
+	Enable          bool     `yaml:"enable" json:"enable"`
+	OverrideDest    bool     `yaml:"override-destination" json:"override-destination"`
+	Sniffing        []string `yaml:"sniffing" json:"sniffing"`
+	ForceDomain     []string `yaml:"force-domain" json:"force-domain"`
+	SkipSrcAddress  []string `yaml:"skip-src-address" json:"skip-src-address"`
+	SkipDstAddress  []string `yaml:"skip-dst-address" json:"skip-dst-address"`
+	SkipDomain      []string `yaml:"skip-domain" json:"skip-domain"`
+	Ports           []string `yaml:"port-whitelist" json:"port-whitelist"`
+	ForceDnsMapping bool     `yaml:"force-dns-mapping" json:"force-dns-mapping"`
+	ParsePureIp     bool     `yaml:"parse-pure-ip" json:"parse-pure-ip"`
+
+	Sniff map[string]RawSniffingConfig `yaml:"sniff" json:"sniff"`
 }
 
 type RawSniffingConfig struct {
 	Ports        []string `yaml:"ports" json:"ports"`
 	OverrideDest *bool    `yaml:"override-destination" json:"override-destination"`
+}
+
+type RawTLS struct {
+	Certificate     string   `yaml:"certificate" json:"certificate"`
+	PrivateKey      string   `yaml:"private-key" json:"private-key"`
+	CustomTrustCert []string `yaml:"custom-certifactes" json:"custom-certifactes"`
+}
+
+type RawConfig struct {
+	Port                    int               `yaml:"port" json:"port"`
+	SocksPort               int               `yaml:"socks-port" json:"socks-port"`
+	RedirPort               int               `yaml:"redir-port" json:"redir-port"`
+	TProxyPort              int               `yaml:"tproxy-port" json:"tproxy-port"`
+	MixedPort               int               `yaml:"mixed-port" json:"mixed-port"`
+	ShadowSocksConfig       string            `yaml:"ss-config" json:"ss-config"`
+	VmessConfig             string            `yaml:"vmess-config" json:"vmess-config"`
+	InboundTfo              bool              `yaml:"inbound-tfo" json:"inbound-tfo"`
+	InboundMPTCP            bool              `yaml:"inbound-mptcp" json:"inbound-mptcp"`
+	Authentication          []string          `yaml:"authentication" json:"authentication"`
+	SkipAuthPrefixes        []netip.Prefix    `yaml:"skip-auth-prefixes" json:"skip-auth-prefixes"`
+	LanAllowedIPs           []netip.Prefix    `yaml:"lan-allowed-ips" json:"lan-allowed-ips"`
+	LanDisAllowedIPs        []netip.Prefix    `yaml:"lan-disallowed-ips" json:"lan-disallowed-ips"`
+	AllowLan                bool              `yaml:"allow-lan" json:"allow-lan"`
+	BindAddress             string            `yaml:"bind-address" json:"bind-address"`
+	Mode                    T.TunnelMode      `yaml:"mode" json:"mode"`
+	UnifiedDelay            bool              `yaml:"unified-delay" json:"unified-delay"`
+	LogLevel                log.LogLevel      `yaml:"log-level" json:"log-level"`
+	IPv6                    bool              `yaml:"ipv6" json:"ipv6"`
+	ExternalController      string            `yaml:"external-controller" json:"external-controller"`
+	ExternalControllerUnix  string            `yaml:"external-controller-unix" json:"external-controller-unix"`
+	ExternalControllerTLS   string            `yaml:"external-controller-tls" json:"external-controller-tls"`
+	ExternalUI              string            `yaml:"external-ui" json:"external-ui"`
+	ExternalUIURL           string            `yaml:"external-ui-url" json:"external-ui-url"`
+	ExternalUIName          string            `yaml:"external-ui-name" json:"external-ui-name"`
+	ExternalDohServer       string            `yaml:"external-doh-server" json:"external-doh-server"`
+	Secret                  string            `yaml:"secret" json:"secret"`
+	Interface               string            `yaml:"interface-name" json:"interface-name"`
+	RoutingMark             int               `yaml:"routing-mark" json:"routing-mark"`
+	Tunnels                 []LC.Tunnel       `yaml:"tunnels" json:"tunnels"`
+	GeoAutoUpdate           bool              `yaml:"geo-auto-update" json:"geo-auto-update"`
+	GeoUpdateInterval       int               `yaml:"geo-update-interval" json:"geo-update-interval"`
+	GeodataMode             bool              `yaml:"geodata-mode" json:"geodata-mode"`
+	GeodataLoader           string            `yaml:"geodata-loader" json:"geodata-loader"`
+	GeositeMatcher          string            `yaml:"geosite-matcher" json:"geosite-matcher"`
+	TCPConcurrent           bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
+	GlobalClientFingerprint string            `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
+	GlobalUA                string            `yaml:"global-ua" json:"global-ua"`
+	KeepAliveIdle           int               `yaml:"keep-alive-idle" json:"keep-alive-idle"`
+	KeepAliveInterval       int               `yaml:"keep-alive-interval" json:"keep-alive-interval"`
+	DisableKeepAlive        bool              `yaml:"disable-keep-alive" json:"disable-keep-alive"`
+
+	ProxyProvider map[string]map[string]any `yaml:"proxy-providers" json:"proxy-providers"`
+	RuleProvider  map[string]map[string]any `yaml:"rule-providers" json:"rule-providers"`
+	Proxy         []map[string]any          `yaml:"proxies" json:"proxies"`
+	ProxyGroup    []map[string]any          `yaml:"proxy-groups" json:"proxy-groups"`
+	Rule          []string                  `yaml:"rules" json:"rule"`
+	SubRules      map[string][]string       `yaml:"sub-rules" json:"sub-rules"`
+	Listeners     []map[string]any          `yaml:"listeners" json:"listeners"`
+	Hosts         map[string]any            `yaml:"hosts" json:"hosts"`
+	DNS           RawDNS                    `yaml:"dns" json:"dns"`
+	NTP           RawNTP                    `yaml:"ntp" json:"ntp"`
+	Tun           RawTun                    `yaml:"tun" json:"tun"`
+	TuicServer    RawTuicServer             `yaml:"tuic-server" json:"tuic-server"`
+	IPTables      RawIPTables               `yaml:"iptables" json:"iptables"`
+	Experimental  RawExperimental           `yaml:"experimental" json:"experimental"`
+	Profile       RawProfile                `yaml:"profile" json:"profile"`
+	GeoXUrl       RawGeoXUrl                `yaml:"geox-url" json:"geox-url"`
+	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
+	TLS           RawTLS                    `yaml:"tls" json:"tls"`
+
+	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
 }
 
 var (
@@ -396,9 +424,8 @@ func Parse(buf []byte) (*Config, error) {
 	return ParseRawConfig(rawCfg)
 }
 
-func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
-	// config with default value
-	rawCfg := &RawConfig{
+func DefaultRawConfig() *RawConfig {
+	return &RawConfig{
 		AllowLan:          false,
 		BindAddress:       "*",
 		LanAllowedIPs:     []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")},
@@ -418,41 +445,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		TCPConcurrent:     false,
 		FindProcessMode:   P.FindProcessStrict,
 		GlobalUA:          "clash.meta/" + C.Version,
-		Tun: RawTun{
-			Enable:              false,
-			Device:              "",
-			Stack:               C.TunGvisor,
-			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
-			AutoRoute:           true,
-			AutoDetectInterface: true,
-			Inet6Address:        []netip.Prefix{netip.MustParsePrefix("fdfe:dcba:9876::1/126")},
-		},
-		TuicServer: RawTuicServer{
-			Enable:                false,
-			Token:                 nil,
-			Users:                 nil,
-			Certificate:           "",
-			PrivateKey:            "",
-			Listen:                "",
-			CongestionController:  "",
-			MaxIdleTime:           15000,
-			AuthenticationTimeout: 1000,
-			ALPN:                  []string{"h3"},
-			MaxUdpRelayPacketSize: 1500,
-		},
-		IPTables: IPTables{
-			Enable:           false,
-			InboundInterface: "lo",
-			Bypass:           []string{},
-			DnsRedirect:      true,
-		},
-		NTP: RawNTP{
-			Enable:        false,
-			WriteToSystem: false,
-			Server:        "time.apple.com",
-			ServerPort:    123,
-			Interval:      30,
-		},
 		DNS: RawDNS{
 			Enable:         false,
 			IPv6:           false,
@@ -483,10 +475,54 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"www.msftconnecttest.com",
 			},
 		},
-		Experimental: Experimental{
+		NTP: RawNTP{
+			Enable:        false,
+			WriteToSystem: false,
+			Server:        "time.apple.com",
+			Port:          123,
+			Interval:      30,
+		},
+		Tun: RawTun{
+			Enable:              false,
+			Device:              "",
+			Stack:               C.TunGvisor,
+			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
+			AutoRoute:           true,
+			AutoDetectInterface: true,
+			Inet6Address:        []netip.Prefix{netip.MustParsePrefix("fdfe:dcba:9876::1/126")},
+		},
+		TuicServer: RawTuicServer{
+			Enable:                false,
+			Token:                 nil,
+			Users:                 nil,
+			Certificate:           "",
+			PrivateKey:            "",
+			Listen:                "",
+			CongestionController:  "",
+			MaxIdleTime:           15000,
+			AuthenticationTimeout: 1000,
+			ALPN:                  []string{"h3"},
+			MaxUdpRelayPacketSize: 1500,
+		},
+		IPTables: RawIPTables{
+			Enable:           false,
+			InboundInterface: "lo",
+			Bypass:           []string{},
+			DnsRedirect:      true,
+		},
+		Experimental: RawExperimental{
 			// https://github.com/quic-go/quic-go/issues/4178
 			// Quic-go currently cannot automatically fall back on platforms that do not support ecn, so this feature is turned off by default.
 			QUICGoDisableECN: true,
+		},
+		Profile: RawProfile{
+			StoreSelected: true,
+		},
+		GeoXUrl: RawGeoXUrl{
+			Mmdb:    "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb",
+			ASN:     "https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb",
+			GeoIp:   "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat",
+			GeoSite: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat",
 		},
 		Sniffer: RawSniffer{
 			Enable:          false,
@@ -498,17 +534,13 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			ParsePureIp:     true,
 			OverrideDest:    true,
 		},
-		Profile: Profile{
-			StoreSelected: true,
-		},
-		GeoXUrl: GeoXUrl{
-			Mmdb:    "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb",
-			ASN:     "https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb",
-			GeoIp:   "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat",
-			GeoSite: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat",
-		},
 		ExternalUIURL: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
 	}
+}
+
+func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
+	// config with default value
+	rawCfg := DefaultRawConfig()
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
 		return nil, err
@@ -521,10 +553,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config := &Config{}
 	log.Infoln("Start initial configuration in progress") //Segment finished in xxm
 	startTime := time.Now()
-	config.Experimental = &rawCfg.Experimental
-	config.Profile = &rawCfg.Profile
-	config.IPTables = &rawCfg.IPTables
-	config.TLS = &rawCfg.RawTLS
 
 	general, err := parseGeneral(rawCfg)
 	if err != nil {
@@ -536,6 +564,42 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		log.Debugln("GlobalClientFingerprint: %s", config.General.GlobalClientFingerprint)
 		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
 	}
+
+	controller, err := parseController(rawCfg)
+	if err != nil {
+		return nil, err
+	}
+	config.Controller = controller
+
+	experimental, err := parseExperimental(rawCfg)
+	if err != nil {
+		return nil, err
+	}
+	config.Experimental = experimental
+
+	iptables, err := parseIPTables(rawCfg)
+	if err != nil {
+		return nil, err
+	}
+	config.IPTables = iptables
+
+	ntpCfg, err := parseNTP(rawCfg)
+	if err != nil {
+		return nil, err
+	}
+	config.NTP = ntpCfg
+
+	profile, err := parseProfile(rawCfg)
+	if err != nil {
+		return nil, err
+	}
+	config.Profile = profile
+
+	tlsCfg, err := parseTLS(rawCfg)
+	if err != nil {
+		return nil, err
+	}
+	config.TLS = tlsCfg
 
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
@@ -576,10 +640,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Hosts = hosts
 
-	ntpCfg := paresNTP(rawCfg)
-	config.NTP = ntpCfg
-
-	dnsCfg, err := parseDNS(rawCfg, hosts, rules, ruleProviders)
+	dnsCfg, err := parseDNS(rawCfg, hosts, ruleProviders)
 	if err != nil {
 		return nil, err
 	}
@@ -687,21 +748,18 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			InboundTfo:        cfg.InboundTfo,
 			InboundMPTCP:      cfg.InboundMPTCP,
 		},
-		Controller: Controller{
-			ExternalController:     cfg.ExternalController,
-			ExternalUI:             cfg.ExternalUI,
-			Secret:                 cfg.Secret,
-			ExternalControllerUnix: cfg.ExternalControllerUnix,
-			ExternalControllerTLS:  cfg.ExternalControllerTLS,
-			ExternalDohServer:      cfg.ExternalDohServer,
+		UnifiedDelay: cfg.UnifiedDelay,
+		Mode:         cfg.Mode,
+		LogLevel:     cfg.LogLevel,
+		IPv6:         cfg.IPv6,
+		Interface:    cfg.Interface,
+		RoutingMark:  cfg.RoutingMark,
+		GeoXUrl: GeoXUrl{
+			GeoIp:   cfg.GeoXUrl.GeoIp,
+			Mmdb:    cfg.GeoXUrl.Mmdb,
+			ASN:     cfg.GeoXUrl.ASN,
+			GeoSite: cfg.GeoXUrl.GeoSite,
 		},
-		UnifiedDelay:            cfg.UnifiedDelay,
-		Mode:                    cfg.Mode,
-		LogLevel:                cfg.LogLevel,
-		IPv6:                    cfg.IPv6,
-		Interface:               cfg.Interface,
-		RoutingMark:             cfg.RoutingMark,
-		GeoXUrl:                 cfg.GeoXUrl,
 		GeoAutoUpdate:           cfg.GeoAutoUpdate,
 		GeoUpdateInterval:       cfg.GeoUpdateInterval,
 		GeodataMode:             cfg.GeodataMode,
@@ -710,6 +768,61 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		FindProcessMode:         cfg.FindProcessMode,
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 		GlobalUA:                cfg.GlobalUA,
+	}, nil
+}
+
+func parseController(cfg *RawConfig) (*Controller, error) {
+	return &Controller{
+		ExternalController:     cfg.ExternalController,
+		ExternalUI:             cfg.ExternalUI,
+		Secret:                 cfg.Secret,
+		ExternalControllerUnix: cfg.ExternalControllerUnix,
+		ExternalControllerTLS:  cfg.ExternalControllerTLS,
+		ExternalDohServer:      cfg.ExternalDohServer,
+	}, nil
+}
+
+func parseExperimental(cfg *RawConfig) (*Experimental, error) {
+	return &Experimental{
+		Fingerprints:     cfg.Experimental.Fingerprints,
+		QUICGoDisableGSO: cfg.Experimental.QUICGoDisableGSO,
+		QUICGoDisableECN: cfg.Experimental.QUICGoDisableECN,
+		IP4PEnable:       cfg.Experimental.IP4PEnable,
+	}, nil
+}
+
+func parseIPTables(cfg *RawConfig) (*IPTables, error) {
+	return &IPTables{
+		Enable:           cfg.IPTables.Enable,
+		InboundInterface: cfg.IPTables.InboundInterface,
+		Bypass:           cfg.IPTables.Bypass,
+		DnsRedirect:      cfg.IPTables.DnsRedirect,
+	}, nil
+}
+
+func parseNTP(cfg *RawConfig) (*NTP, error) {
+	return &NTP{
+		Enable:        cfg.NTP.Enable,
+		Server:        cfg.NTP.Server,
+		Port:          cfg.NTP.Port,
+		Interval:      cfg.NTP.Interval,
+		DialerProxy:   cfg.NTP.DialerProxy,
+		WriteToSystem: cfg.NTP.WriteToSystem,
+	}, nil
+}
+
+func parseProfile(cfg *RawConfig) (*Profile, error) {
+	return &Profile{
+		StoreSelected: cfg.Profile.StoreSelected,
+		StoreFakeIP:   cfg.Profile.StoreFakeIP,
+	}, nil
+}
+
+func parseTLS(cfg *RawConfig) (*TLS, error) {
+	return &TLS{
+		Certificate:     cfg.TLS.Certificate,
+		PrivateKey:      cfg.TLS.PrivateKey,
+		CustomTrustCert: cfg.TLS.CustomTrustCert,
 	}, nil
 }
 
@@ -1184,7 +1297,7 @@ func parsePureDNSServer(server string) string {
 	}
 }
 
-func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rules []C.Rule, ruleProviders map[string]providerTypes.RuleProvider, respectRules bool, preferH3 bool) ([]dns.Policy, error) {
+func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]providerTypes.RuleProvider, respectRules bool, preferH3 bool) ([]dns.Policy, error) {
 	var policy []dns.Policy
 	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
 
@@ -1237,18 +1350,18 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rules [
 
 		if strings.HasPrefix(domain, "rule-set:") {
 			domainSetName := domain[9:]
-			rule, err := parseDomainRuleSet(domainSetName, "dns.nameserver-policy", ruleProviders)
+			matcher, err := parseDomainRuleSet(domainSetName, "dns.nameserver-policy", ruleProviders)
 			if err != nil {
 				return nil, err
 			}
-			policy[idx] = dns.Policy{Rule: rule, NameServers: nameservers}
+			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
 		} else if strings.HasPrefix(domain, "geosite:") {
 			country := domain[8:]
-			rule, err := RC.NewGEOSITE(country, "dns.nameserver-policy")
+			matcher, err := RC.NewGEOSITE(country, "dns.nameserver-policy")
 			if err != nil {
 				return nil, err
 			}
-			policy[idx] = dns.Policy{Rule: rule, NameServers: nameservers}
+			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
 		} else {
 			if _, valid := trie.ValidAndSplitDomain(domain); !valid {
 				return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
@@ -1259,20 +1372,7 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rules [
 	return policy, nil
 }
 
-func paresNTP(rawCfg *RawConfig) *NTP {
-	cfg := rawCfg.NTP
-	ntpCfg := &NTP{
-		Enable:        cfg.Enable,
-		Server:        cfg.Server,
-		Port:          cfg.ServerPort,
-		Interval:      cfg.Interval,
-		DialerProxy:   cfg.DialerProxy,
-		WriteToSystem: cfg.WriteToSystem,
-	}
-	return ntpCfg
-}
-
-func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rules []C.Rule, ruleProviders map[string]providerTypes.RuleProvider) (*DNS, error) {
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], ruleProviders map[string]providerTypes.RuleProvider) (*DNS, error) {
 	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
@@ -1300,7 +1400,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		return nil, err
 	}
 
-	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, rules, ruleProviders, cfg.RespectRules, cfg.PreferH3); err != nil {
+	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, ruleProviders, cfg.RespectRules, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
@@ -1367,14 +1467,13 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		dnsCfg.FakeIPRange = pool
 	}
 
-	var rule C.Rule
 	if len(cfg.Fallback) != 0 {
 		if cfg.FallbackFilter.GeoIP {
-			rule, err = RC.NewGEOIP(cfg.FallbackFilter.GeoIPCode, "", false, true)
+			matcher, err := RC.NewGEOIP(cfg.FallbackFilter.GeoIPCode, "dns.fallback-filter.geoip", false, true)
 			if err != nil {
 				return nil, fmt.Errorf("load GeoIP dns fallback filter error, %w", err)
 			}
-			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, rule)
+			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, matcher)
 		}
 		if len(cfg.FallbackFilter.IPCIDR) > 0 {
 			cidrSet := cidr.NewIpCidrSet()
@@ -1388,8 +1487,8 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 			if err != nil {
 				return nil, err
 			}
-			rule = RP.NewIpCidrSet(cidrSet, "dns.fallback-filter.ipcidr")
-			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, rule)
+			matcher := cidrSet // dns.fallback-filter.ipcidr
+			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, matcher)
 		}
 		if len(cfg.FallbackFilter.Domain) > 0 {
 			domainTrie := trie.New[struct{}]()
@@ -1399,17 +1498,17 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 					return nil, fmt.Errorf("DNS FallbackDomain[%d] format error: %w", idx, err)
 				}
 			}
-			rule = RP.NewDomainSet(domainTrie.NewDomainSet(), "dns.fallback-filter.domain")
-			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, rule)
+			matcher := domainTrie.NewDomainSet() // dns.fallback-filter.domain
+			dnsCfg.FallbackDomainFilter = append(dnsCfg.FallbackDomainFilter, matcher)
 		}
 		if len(cfg.FallbackFilter.GeoSite) > 0 {
 			log.Warnln("replace fallback-filter.geosite with nameserver-policy, it will be removed in the future")
 			for idx, geoSite := range cfg.FallbackFilter.GeoSite {
-				rule, err = RC.NewGEOSITE(geoSite, "dns.fallback-filter.geosite")
+				matcher, err := RC.NewGEOSITE(geoSite, "dns.fallback-filter.geosite")
 				if err != nil {
 					return nil, fmt.Errorf("DNS FallbackGeosite[%d] format error: %w", idx, err)
 				}
-				dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, rule)
+				dnsCfg.FallbackDomainFilter = append(dnsCfg.FallbackDomainFilter, matcher)
 			}
 		}
 	}
@@ -1511,13 +1610,13 @@ func parseTuicServer(rawTuic RawTuicServer, general *General) error {
 	return nil
 }
 
-func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.RuleProvider) (*Sniffer, error) {
-	sniffer := &Sniffer{
+func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.RuleProvider) (*sniffer.Config, error) {
+	snifferConfig := &sniffer.Config{
 		Enable:          snifferRaw.Enable,
 		ForceDnsMapping: snifferRaw.ForceDnsMapping,
 		ParsePureIp:     snifferRaw.ParsePureIp,
 	}
-	loadSniffer := make(map[snifferTypes.Type]SNIFF.SnifferConfig)
+	loadSniffer := make(map[snifferTypes.Type]sniffer.SnifferConfig)
 
 	if len(snifferRaw.Sniff) != 0 {
 		for sniffType, sniffConfig := range snifferRaw.Sniff {
@@ -1533,7 +1632,7 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.
 			for _, snifferType := range snifferTypes.List {
 				if snifferType.String() == strings.ToUpper(sniffType) {
 					find = true
-					loadSniffer[snifferType] = SNIFF.SnifferConfig{
+					loadSniffer[snifferType] = sniffer.SnifferConfig{
 						Ports:        ports,
 						OverrideDest: overrideDest,
 					}
@@ -1545,7 +1644,7 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.
 			}
 		}
 	} else {
-		if sniffer.Enable && len(snifferRaw.Sniffing) != 0 {
+		if snifferConfig.Enable && len(snifferRaw.Sniffing) != 0 {
 			// Deprecated: Use Sniff instead
 			log.Warnln("Deprecated: Use Sniff instead")
 		}
@@ -1559,7 +1658,7 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.
 			for _, snifferType := range snifferTypes.List {
 				if snifferType.String() == strings.ToUpper(snifferName) {
 					find = true
-					loadSniffer[snifferType] = SNIFF.SnifferConfig{
+					loadSniffer[snifferType] = sniffer.SnifferConfig{
 						Ports:        globalPorts,
 						OverrideDest: snifferRaw.OverrideDest,
 					}
@@ -1572,25 +1671,84 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.
 		}
 	}
 
-	sniffer.Sniffers = loadSniffer
+	snifferConfig.Sniffers = loadSniffer
 
 	forceDomain, err := parseDomain(snifferRaw.ForceDomain, nil, "sniffer.force-domain", ruleProviders)
 	if err != nil {
 		return nil, fmt.Errorf("error in force-domain, error:%w", err)
 	}
-	sniffer.ForceDomain = forceDomain
+	snifferConfig.ForceDomain = forceDomain
+
+	skipSrcAddress, err := parseIPCIDR(snifferRaw.SkipSrcAddress, nil, "sniffer.skip-src-address", ruleProviders)
+	if err != nil {
+		return nil, fmt.Errorf("error in skip-src-address, error:%w", err)
+	}
+	snifferConfig.SkipSrcAddress = skipSrcAddress
+
+	skipDstAddress, err := parseIPCIDR(snifferRaw.SkipDstAddress, nil, "sniffer.skip-src-address", ruleProviders)
+	if err != nil {
+		return nil, fmt.Errorf("error in skip-dst-address, error:%w", err)
+	}
+	snifferConfig.SkipDstAddress = skipDstAddress
 
 	skipDomain, err := parseDomain(snifferRaw.SkipDomain, nil, "sniffer.skip-domain", ruleProviders)
 	if err != nil {
 		return nil, fmt.Errorf("error in skip-domain, error:%w", err)
 	}
-	sniffer.SkipDomain = skipDomain
+	snifferConfig.SkipDomain = skipDomain
 
-	return sniffer, nil
+	return snifferConfig, nil
 }
 
-func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (domainRules []C.Rule, err error) {
-	var rule C.Rule
+func parseIPCIDR(addresses []string, cidrSet *cidr.IpCidrSet, adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (matchers []C.IpMatcher, err error) {
+	var matcher C.IpMatcher
+	for _, ipcidr := range addresses {
+		ipcidrLower := strings.ToLower(ipcidr)
+		if strings.Contains(ipcidrLower, "geoip:") {
+			subkeys := strings.Split(ipcidr, ":")
+			subkeys = subkeys[1:]
+			subkeys = strings.Split(subkeys[0], ",")
+			for _, country := range subkeys {
+				matcher, err = RC.NewGEOIP(country, adapterName, false, false)
+				if err != nil {
+					return nil, err
+				}
+				matchers = append(matchers, matcher)
+			}
+		} else if strings.Contains(ipcidrLower, "rule-set:") {
+			subkeys := strings.Split(ipcidr, ":")
+			subkeys = subkeys[1:]
+			subkeys = strings.Split(subkeys[0], ",")
+			for _, domainSetName := range subkeys {
+				matcher, err = parseIPRuleSet(domainSetName, adapterName, ruleProviders)
+				if err != nil {
+					return nil, err
+				}
+				matchers = append(matchers, matcher)
+			}
+		} else {
+			if cidrSet == nil {
+				cidrSet = cidr.NewIpCidrSet()
+			}
+			err = cidrSet.AddIpCidrForString(ipcidr)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if !cidrSet.IsEmpty() {
+		err = cidrSet.Merge()
+		if err != nil {
+			return nil, err
+		}
+		matcher = cidrSet
+		matchers = append(matchers, matcher)
+	}
+	return
+}
+
+func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (matchers []C.DomainMatcher, err error) {
+	var matcher C.DomainMatcher
 	for _, domain := range domains {
 		domainLower := strings.ToLower(domain)
 		if strings.Contains(domainLower, "geosite:") {
@@ -1598,22 +1756,22 @@ func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapte
 			subkeys = subkeys[1:]
 			subkeys = strings.Split(subkeys[0], ",")
 			for _, country := range subkeys {
-				rule, err = RC.NewGEOSITE(country, adapterName)
+				matcher, err = RC.NewGEOSITE(country, adapterName)
 				if err != nil {
 					return nil, err
 				}
-				domainRules = append(domainRules, rule)
+				matchers = append(matchers, matcher)
 			}
 		} else if strings.Contains(domainLower, "rule-set:") {
 			subkeys := strings.Split(domain, ":")
 			subkeys = subkeys[1:]
 			subkeys = strings.Split(subkeys[0], ",")
 			for _, domainSetName := range subkeys {
-				rule, err = parseDomainRuleSet(domainSetName, adapterName, ruleProviders)
+				matcher, err = parseDomainRuleSet(domainSetName, adapterName, ruleProviders)
 				if err != nil {
 					return nil, err
 				}
-				domainRules = append(domainRules, rule)
+				matchers = append(matchers, matcher)
 			}
 		} else {
 			if domainTrie == nil {
@@ -1626,13 +1784,28 @@ func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapte
 		}
 	}
 	if !domainTrie.IsEmpty() {
-		rule = RP.NewDomainSet(domainTrie.NewDomainSet(), adapterName)
-		domainRules = append(domainRules, rule)
+		matcher = domainTrie.NewDomainSet()
+		matchers = append(matchers, matcher)
 	}
 	return
 }
 
-func parseDomainRuleSet(domainSetName string, adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (C.Rule, error) {
+func parseIPRuleSet(domainSetName string, adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (C.IpMatcher, error) {
+	if rp, ok := ruleProviders[domainSetName]; !ok {
+		return nil, fmt.Errorf("not found rule-set: %s", domainSetName)
+	} else {
+		switch rp.Behavior() {
+		case providerTypes.Domain:
+			return nil, fmt.Errorf("rule provider type error, except ipcidr,actual %s", rp.Behavior())
+		case providerTypes.Classical:
+			log.Warnln("%s provider is %s, only matching it contain ip rule", rp.Name(), rp.Behavior())
+		default:
+		}
+	}
+	return RP.NewRuleSet(domainSetName, adapterName, true)
+}
+
+func parseDomainRuleSet(domainSetName string, adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (C.DomainMatcher, error) {
 	if rp, ok := ruleProviders[domainSetName]; !ok {
 		return nil, fmt.Errorf("not found rule-set: %s", domainSetName)
 	} else {
